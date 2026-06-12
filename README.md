@@ -10,7 +10,7 @@ A CI pipeline for a Node.js application that performs matrix builds, linting, te
 - Matrix CI (Linux & Windows, Node.js 18 & 20)
 - Automated Lint + Test stage
 - Multi-stage Docker build for optimized image size
-- Secure AWS ECR authentication via GitHub Actions
+- Secure AWS ECR authentication via GitHub Actions 
 
 ## 🗂️ Repository Structure
 
