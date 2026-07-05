@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-  paths-ignore:
+    paths-ignore:
       - 'k8s/manifests/**'
 env:
   ECR_REPOSITORY: node-app
