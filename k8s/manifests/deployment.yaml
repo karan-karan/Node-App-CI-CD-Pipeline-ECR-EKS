@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
       - name: node-app
-        image: 969333511575.dkr.ecr.ap-south-1.amazonaws.com/node-app:37f324a7
+        image: 969333511575.dkr.ecr.ap-south-1.amazonaws.com/node-app:b30ee24e
         ports:
         - containerPort: 3000
