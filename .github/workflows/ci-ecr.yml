@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - main
+  paths-ignore:
+      - 'k8s/manifests/**'
 env:
   ECR_REPOSITORY: node-app
   IMAGE_TAG: latest
