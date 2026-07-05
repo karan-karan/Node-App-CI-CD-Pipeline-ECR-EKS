@@ -3,11 +3,9 @@ on:
   push:
     branches:
       - main
-
 env:
   ECR_REPOSITORY: node-app
   IMAGE_TAG: latest
-
 #----------------------------------------------------
 # 1. Matrix Build + LINT + TEST
 #----------------------------------------------------
@@ -15,69 +13,81 @@ jobs:
   build-and-test:
     name: Build and Test on ${{ matrix.os }} with Node.js ${{ matrix['node-version'] }}
     runs-on: ${{ matrix.os }}
-
     strategy:
       matrix:
         os: [ubuntu-latest]
         node-version: [18, 20]
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix['node-version'] }}
-
-      # Install dependencies
       - name: Install Dependencies
         run: npm ci
-
-      # Lint the code
       - name: Run Linter
         run: npm run lint
-
-      # Run tests
       - name: Run Tests
         run: npm test
-
-
 #----------------------------------------------------
 # 2. Multi-Stage Docker Build + Push
-# Runs only after successful completion of build-and-test job
 #----------------------------------------------------
   docker-build-and-push:
     name: Build and Push Docker Image to ECR
     needs: build-and-test
     runs-on: ubuntu-latest
-
+    outputs:
+      image_tag: ${{ steps.set_tag.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set image tag
-        run: echo "IMAGE_TAG=${GITHUB_SHA::8}" >> $GITHUB_ENV
-
+        id: set_tag
+        run: |
+          echo "IMAGE_TAG=${GITHUB_SHA::8}" >> $GITHUB_ENV
+          echo "image_tag=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
       - name: Build, tag, and push Docker image to ECR
         run: |
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
-
           docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
-
           docker push ${{ steps.login-ecr.outputs.registry }}/${ECR_REPOSITORY}:$IMAGE_TAG
-
       - name: Success Message
         run: echo "Docker image pushed to ECR successfully!"
-          
+#----------------------------------------------------
+# 3. Update image tag in CD repo
+#----------------------------------------------------
+  update-manifest:
+    name: Update Image Tag in CD Repo
+    needs: docker-build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set image tag
+        run: echo "IMAGE_TAG=${{ needs.docker-build-and-push.outputs.image_tag }}" >> $GITHUB_ENV
+
+      - name: Checkout CD repo
+        uses: actions/checkout@v4
+        with:
+          repository: karan-karan/Node-App-CI-CD-Pipeline-ECR-EKS
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Update image tag in deployment.yaml
+        run: |
+          sed -i "s|image: .*|image: 969333511575.dkr.ecr.ap-south-1.amazonaws.com/node-app:${{ env.IMAGE_TAG }}|g" k8s/manifests/deployment.yaml
+
+      - name: Commit and push
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "github-actions"
+          git add k8s/manifests/deployment.yaml
+          git commit -m "Update image tag to ${{ env.IMAGE_TAG }}"
+          git push
